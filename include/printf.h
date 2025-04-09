@@ -46,6 +46,8 @@
     #endif
 #endif
 
+void my_printf(const char* fmt, ...);
+
 /* support for wolfBoot_printf logging */
 #if defined(PRINTF_ENABLED) && !defined(WOLFBOOT_NO_PRINTF)
 #   include <stdio.h>
@@ -71,7 +73,7 @@
 #       define wolfBoot_printf(_f_, ...) fprintf(stderr, _f_, ##__VA_ARGS__)
 #   endif
 #else
-#   define wolfBoot_printf(_f_, ...) do{}while(0)
+#   define wolfBoot_printf(_f_, ...) my_printf(_f_, ##__VA_ARGS__)
 #endif
 
 #endif /* !WOLFBOOT_PRINTF_INCLUDED */

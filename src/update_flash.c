@@ -936,6 +936,12 @@ int wolfBoot_unlock_disk(void)
 }
 #endif
 
+int __attribute__((noinline)) BREAKPOINT() {
+    for (;;) {}
+}
+
+unsigned int FUZZ_INPUT;
+
 void RAMFUNCTION wolfBoot_start(void)
 {
     int bootRet;
@@ -994,11 +1000,16 @@ void RAMFUNCTION wolfBoot_start(void)
             wolfBoot_update(0);
         }
     }
+    
+    FUZZ_INPUT = 45;
+    if (FUZZ_INPUT == 0) wolfBoot_printf("Fake bug\n");
 
     bootRet = wolfBoot_open_image(&boot, PART_BOOT);
     wolfBoot_printf("Booting version: 0x%x\n",
         wolfBoot_get_blob_version(boot.hdr));
-
+    // wolfBoot_printf("Boot Ret: %d\n", bootRet);
+    // wolfBoot_printf("Integrity: %d\n", wolfBoot_verify_integrity(&boot));
+    // wolfBoot_printf("Authenticity: %d\n", wolfBoot_verify_authenticity(&boot));
     if (bootRet < 0
             || (wolfBoot_verify_integrity(&boot) < 0)
             || (wolfBoot_verify_authenticity(&boot) < 0)
@@ -1042,6 +1053,8 @@ void RAMFUNCTION wolfBoot_start(void)
 #endif
     hal_prepare_boot();
     do_boot((void *)boot.fw_base);
+
+    BREAKPOINT();
 }
 
 #ifdef WOLFBOOT_ARMORED

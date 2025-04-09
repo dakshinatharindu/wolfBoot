@@ -32,7 +32,7 @@
 #else
 size_t strlen(const char *s); /* forward declaration */
 #endif
-
+#include <stdarg.h>
 #ifdef DEBUG_UART
     #include "printf.h"
     #ifdef PRINTF_ENABLED
@@ -423,3 +423,129 @@ void uart_printf(const char* fmt, ...)
     va_end(argp);
 }
 #endif /* PRINTF_ENABLED && DEBUG_UART */
+
+void uart_write(char c);
+
+void my_uart_write(const char *p, unsigned int len)
+{
+    while (len--) {
+        uart_write(*p++);
+    }
+}
+
+void my_uart_writenum(int num, int base, int zeropad, int maxdigits)
+{
+    int i = 0;
+    char buf[sizeof(unsigned long)*2+1];
+    const char* kDigitLut = "0123456789ABCDEF";
+    unsigned int val = (unsigned int)num;
+    int sz = 0;
+    if (maxdigits == 0)
+        maxdigits = 8;
+    if (maxdigits > (int)sizeof(buf))
+        maxdigits = (int)sizeof(buf);
+    memset(buf, 0, sizeof(buf));
+    if (base == 10 && num < 0) { /* handle negative */
+        buf[i++] = '-';
+        val = -num;
+    }
+    if (zeropad) {
+        memset(&buf[i], '0', maxdigits);
+    }
+    do {
+        buf[sizeof(buf)-sz-1] = kDigitLut[(val % base)];
+        sz++;
+        val /= base;
+    } while (val > 0U);
+    if (zeropad && sz < maxdigits) {
+        i += maxdigits-sz;
+    }
+    memmove(&buf[i], &buf[sizeof(buf)-sz], sz);
+    i+=sz;
+    my_uart_write(buf, i);
+}
+
+void my_uart_vprintf(const char* fmt, va_list argp)
+{
+    char* fmtp = (char*)fmt;
+    int zeropad, maxdigits;
+    while (fmtp != NULL && *fmtp != '\0') {
+        /* print non formatting characters */
+        if (*fmtp != '%') {
+            my_uart_write(fmtp++, 1);
+            continue;
+        }
+        fmtp++; /* skip % */
+
+        /* find formatters */
+        zeropad = maxdigits = 0;
+        while (*fmtp != '\0') {
+            if (*fmtp >= '0' && *fmtp <= '9') {
+                /* length formatter */
+                if (*fmtp == '0') {
+                    zeropad = 1;
+                }
+                maxdigits <<= 8;
+                maxdigits += (*fmtp - '0');
+                fmtp++;
+            }
+            else if (*fmtp == 'l') {
+                /* long - skip */
+                fmtp++;
+            }
+            else if (*fmtp == 'z') {
+                /* auto type - skip */
+                fmtp++;
+            }
+            else {
+                break;
+            }
+        }
+
+        switch (*fmtp) {
+            case '%':
+            my_uart_write(fmtp, 1);
+                break;
+            case 'u':
+            case 'i':
+            case 'd':
+            {
+                int n = (int)va_arg(argp, int);
+                my_uart_writenum(n, 10, zeropad, maxdigits);
+                break;
+            }
+            case 'p':
+            my_uart_write("0x", 2);
+                /* fall through */
+            case 'x':
+            {
+                int n = (int)va_arg(argp, int);
+                my_uart_writenum(n, 16, zeropad, maxdigits);
+                break;
+            }
+            case 's':
+            {
+                char* str = (char*)va_arg(argp, char*);
+                my_uart_write(str, (uint32_t)strlen(str));
+                break;
+            }
+            case 'c':
+            {
+                char c = (char)va_arg(argp, int);
+                my_uart_write(&c, 1);
+                break;
+            }
+            default:
+                break;
+        }
+        fmtp++;
+    };
+}
+
+void my_printf(const char* fmt, ...)
+{
+    va_list argp;
+    va_start(argp, fmt);
+    my_uart_vprintf(fmt, argp);
+    va_end(argp);
+}
